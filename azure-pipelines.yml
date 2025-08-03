@@ -1,0 +1,67 @@
+name: App-Service-UK-South
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+      - 'uksouth-devops.bicepparam'
+
+variables:
+- name: DeploymentName
+  value: 'Deployment'
+- name: resourceGroupName
+  value: 'bicep-app'
+- name: ServiceConnection
+  value: 'Azure subscription 1(525c7c1f-f5e9-4bf4-8d7a-5b7a06889a12)'
+- name: TemplateParameterFile
+  value: 'uksouth-devops.bicepparam'
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: Validate
+  jobs:
+  - job: Validate
+    steps:
+    - task: AzurePowerShell@5
+      name: Validate
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        ScriptType: 'InlineScript'
+        Inline: 'Test-AzResourceGroupDeployment -ResourceGroupName $(resourceGroupName) -TemplateParameterFile $(TemplateParameterFile) -Verbose'
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
+- stage: WhatIf
+  jobs:
+  - job: WhatIf
+    steps:
+    - task: AzurePowerShell@5
+      name: WhatIf
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        ScriptType: 'InlineScript'
+        Inline: 'New-AzResourceGroupDeployment -Name $(DeploymentName) -ResourceGroupName $(resourceGroupName) -TemplateParameterFile $(TemplateParameterFile) -WhatIf -Verbose'
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
+- stage: Deploy
+  dependsOn: WhatIf
+  jobs:
+  - deployment:
+    displayName: Deploy
+    environment: Production
+    strategy:
+     runOnce:
+       deploy:
+        steps:
+        - checkout: self
+        - task: AzurePowerShell@5
+          name: Deploy
+          inputs:
+            azureSubscription: $(ServiceConnection)
+            ScriptType: 'InlineScript'
+            Inline: 'New-AzResourceGroupDeployment -Name $(DeploymentName) -ResourceGroupName $(resourceGroupName) -TemplateParameterFile $(TemplateParameterFile) -Verbose'
+            azurePowerShellVersion: 'LatestVersion'
+            pwsh: true
